@@ -30,24 +30,45 @@
   #videoWrap{
     position:relative; width:100%; flex:0 0 auto; overflow:hidden;
     background:#000; border-bottom:2px solid #1a1030;
-    height:34dvh; max-height:300px;
+    height:24dvh; max-height:220px;
   }
-  #videoWrap iframe{
+  #videoWrapBottom{
+    position:relative; width:100%; flex:0 0 auto; overflow:hidden;
+    background:#000; border-top:2px solid #1a1030;
+    height:20dvh; max-height:190px;
+  }
+  #videoWrap iframe, #videoWrapBottom iframe{
     position:absolute; top:50%; left:50%; border:0;
     transform:translate(-50%,-50%) rotate(90deg);
     transform-origin:center center;
     pointer-events:none; /* video is decorative — never eats taps meant for the game */
   }
+  .videoStart{
+    position:absolute; inset:0; z-index:2;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.32); cursor:pointer;
+  }
+  .videoStart.hidden{ display:none; }
+  .videoStart .playIcon{
+    width:min(8dvh,48px); height:min(8dvh,48px); border-radius:50%;
+    background:rgba(255,255,255,0.94); display:flex; align-items:center; justify-content:center;
+    box-shadow:0 3px 10px rgba(0,0,0,.5);
+  }
+  .videoStart .playIcon:after{
+    content:''; display:block; margin-left:4px;
+    border-style:solid; border-width:9px 0 9px 14px;
+    border-color:transparent transparent transparent #0b0a16;
+  }
 
   /* ---- wordmark ---- */
   #brand{
     flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:8px;
-    padding:4px 8px 2px; user-select:none;
+    padding:2px 8px 2px; user-select:none;
   }
-  #brand img{ height:26px; width:auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  #brand img{ height:22px; width:auto; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
   #flapWord{
     font-family:'Baloo 2', sans-serif; font-weight:800; font-style:italic;
-    font-size:26px; letter-spacing:1px; line-height:1;
+    font-size:22px; letter-spacing:1px; line-height:1;
     transform:skewX(-6deg);
     background:linear-gradient(180deg, var(--red-hi) 0%, var(--red-lo) 100%);
     -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -111,36 +132,14 @@
 <div id="app">
   <div id="videoWrap">
     <iframe id="ytFrame"
-      src="https://www.youtube-nocookie.com/embed/videoseries?list=PLsMmSUv2TdOlBJpnql8snuz0mFgbFw-Ce&playsinline=1&autoplay=1&mute=1&loop=1"
+      src="https://www.youtube-nocookie.com/embed/videoseries?list=PLsMmSUv2TdOlBJpnql8snuz0mFgbFw-Ce&playsinline=1&autoplay=1&mute=1&loop=1&enablejsapi=1"
       title="Phractals playlist"
       referrerpolicy="strict-origin-when-cross-origin"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
       allowfullscreen>
     </iframe>
+    <div class="videoStart" id="videoStart1"><span class="playIcon"></span></div>
   </div>
-  <script>
-    (function(){
-      var wrap = document.getElementById('videoWrap');
-      var frame = document.getElementById('ytFrame');
-      function sizeVideo(){
-        var r = wrap.getBoundingClientRect();
-        var Ww = r.width, Hw = r.height;
-        if(Ww<=0 || Hw<=0) return;
-        // Assume the source video is 16:9. We size the (unrotated) iframe so
-        // that, once rotated 90deg to lay it flat, its own 16:9 box fully
-        // COVERS the wrap on every side (classic "background-size:cover"
-        // math) — this is what removes the black letterbox bars: the
-        // player's own aspect ratio is respected, we just overscale it.
-        var k = Math.max(Ww/9, Hw/16);
-        var fh = 9*k, fw = 16*k; // fh/fw are the iframe's own (pre-rotation) box
-        frame.style.width = fw + 'px';
-        frame.style.height = fh + 'px';
-      }
-      window.addEventListener('resize', sizeVideo);
-      window.addEventListener('orientationchange', function(){ setTimeout(sizeVideo,150); });
-      sizeVideo();
-    })();
-  </script>
 
   <div id="brand">
     <span id="flapWord">FLAP</span>
@@ -155,7 +154,78 @@
       <div id="menuHint">every 5 pipes she lays an egg — it hatches and follows her!</div>
     </div>
   </div>
+
+  <div id="videoWrapBottom">
+    <iframe id="ytFrame2"
+      src="https://www.youtube-nocookie.com/embed/videoseries?list=PLsMmSUv2TdOnvFuavFBHUaTHvlvcpw-Yo&playsinline=1&autoplay=1&mute=1&loop=1&enablejsapi=1"
+      title="Second playlist"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen>
+    </iframe>
+    <div class="videoStart" id="videoStart2"><span class="playIcon"></span></div>
+  </div>
 </div>
+
+<script>
+  (function(){
+    // Handles cover-fit sizing (kills black bars) and a tap-to-start
+    // overlay (autoplay isn't reliable on every browser) for BOTH video
+    // panels. Each overlay hides itself permanently once tapped.
+    var VIDEOS = [
+      { wrapId:'videoWrap',       frameId:'ytFrame',  startId:'videoStart1' },
+      { wrapId:'videoWrapBottom', frameId:'ytFrame2', startId:'videoStart2' }
+    ];
+
+    function ytCommand(frame, func, args){
+      try{
+        frame.contentWindow.postMessage(JSON.stringify({event:'command', func:func, args:args||[]}), '*');
+      }catch(e){}
+    }
+
+    VIDEOS.forEach(function(cfg){
+      var wrap = document.getElementById(cfg.wrapId);
+      var frame = document.getElementById(cfg.frameId);
+      var startBtn = document.getElementById(cfg.startId);
+
+      function sizeVideo(){
+        var r = wrap.getBoundingClientRect();
+        var Ww = r.width, Hw = r.height;
+        if(Ww<=0 || Hw<=0) return;
+        // Assume the source video is roughly 16:9, then size the
+        // (unrotated) iframe so that once rotated 90deg to lay it flat,
+        // its own box fully COVERS the wrap on every side (classic
+        // "background-size:cover" math). A small overscan buffer is
+        // added on top since not every video in a playlist is exactly
+        // 16:9 — this keeps any residual sliver of letterboxing from
+        // showing regardless of a particular video's real aspect ratio.
+        var OVERSCAN = 1.14;
+        var k = Math.max(Ww/9, Hw/16) * OVERSCAN;
+        var fh = 9*k, fw = 16*k; // fh/fw are the iframe's own (pre-rotation) box
+        frame.style.width = fw + 'px';
+        frame.style.height = fh + 'px';
+      }
+      window.addEventListener('resize', sizeVideo);
+      window.addEventListener('orientationchange', function(){ setTimeout(sizeVideo,150); });
+      sizeVideo();
+      // Mobile browsers sometimes settle their real viewport height (and
+      // the address bar) a moment after load — re-run a couple of times
+      // to catch any late layout shift instead of leaving a stale size.
+      setTimeout(sizeVideo, 300);
+      setTimeout(sizeVideo, 1200);
+
+      // Autoplay (muted) is attempted via the URL, but isn't guaranteed
+      // to actually start on every browser. Show a tap-to-start prompt;
+      // tapping is a real user gesture, so we use it to unmute + play,
+      // then hide the prompt for good.
+      startBtn.addEventListener('click', function(){
+        ytCommand(frame, 'unMute');
+        ytCommand(frame, 'playVideo');
+        startBtn.classList.add('hidden');
+      });
+    });
+  })();
+</script>
 
 <script>
 (function(){
@@ -474,13 +544,13 @@ var MARKER_SRC = {"red":'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEUAAAF8C
     ctx.closePath(); ctx.fill();
   }
 
-  function drawSprite(img, x, y, r, rot, aspectFallbackColor){
+  function drawSprite(img, x, y, r, rot, aspectFallbackColor, sizeMult){
     ctx.save();
     ctx.translate(x, y);
     if(rot) ctx.rotate(rot);
     if(img && img.complete && img.naturalWidth){
       var asp = img.naturalWidth / img.naturalHeight;
-      var dh = r * 3.1, dw = dh * asp;
+      var dh = r * (sizeMult || 3.1), dw = dh * asp;
       ctx.drawImage(img, -dw/2, -dh/2, dw, dh);
     } else {
       ctx.fillStyle = aspectFallbackColor || '#f0505f';
@@ -506,8 +576,11 @@ var MARKER_SRC = {"red":'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEUAAAF8C
 
   function drawBird(){
     var img = CHAR_IMG[selectedChar];
-    drawSprite(img, bird.x, bird.y, bird.r, bird.rot*0.5, '#f0505f');
+    // Drawn noticeably larger than the collision circle (bird.r) so the
+    // character reads well on screen without changing pipe-gap difficulty.
+    drawSprite(img, bird.x, bird.y, bird.r, bird.rot*0.5, '#f0505f', 4.5);
   }
+
 
   function drawHud(){
     if(menuOpen) return;
