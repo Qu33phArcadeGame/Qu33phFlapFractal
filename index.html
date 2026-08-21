@@ -40,6 +40,7 @@
   #videoWrap iframe, #videoWrapBottom iframe{
     position:absolute; top:50%; left:50%; border:0;
     transform:translate(-50%,-50%);
+    transform-origin:center center;
     pointer-events:none; /* video is decorative — never eats taps meant for the game */
   }
   .videoStart{
@@ -156,7 +157,7 @@
 
   <div id="videoWrapBottom">
     <iframe id="ytFrame2"
-      src="https://www.youtube-nocookie.com/embed/videoseries?list=PLsMmSUv2TdOnvFuavFBHUaTHvlvcpw-Yo&playsinline=1&autoplay=1&mute=1&loop=1&enablejsapi=1"
+      src="https://www.youtube-nocookie.com/embed/videoseries?list=PLsMmSUv2TdOkuWgCpKHpxieXKV77xeEUX&playsinline=1&autoplay=1&mute=1&loop=1&enablejsapi=1"
       title="Second playlist"
       referrerpolicy="strict-origin-when-cross-origin"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -171,9 +172,14 @@
     // Handles cover-fit sizing (kills black bars) and a tap-to-start
     // overlay (autoplay isn't reliable on every browser) for BOTH video
     // panels. Each overlay hides itself permanently once tapped.
+    // `rotate: true` is for playlists made of VERTICAL clips (like the
+    // fractal one up top) — rotating 90deg lays them flat so they fill
+    // the horizontal strip. Leave it off for playlists of horizontal
+    // clips (like the bottom one), since rotating those would turn them
+    // on their side.
     var VIDEOS = [
-      { wrapId:'videoWrap',       frameId:'ytFrame',  startId:'videoStart1' },
-      { wrapId:'videoWrapBottom', frameId:'ytFrame2', startId:'videoStart2' }
+      { wrapId:'videoWrap',       frameId:'ytFrame',  startId:'videoStart1', rotate:true  },
+      { wrapId:'videoWrapBottom', frameId:'ytFrame2', startId:'videoStart2', rotate:false }
     ];
 
     function ytCommand(frame, func, args){
@@ -187,23 +193,26 @@
       var frame = document.getElementById(cfg.frameId);
       var startBtn = document.getElementById(cfg.startId);
 
+      frame.style.transform = 'translate(-50%,-50%)' + (cfg.rotate ? ' rotate(90deg)' : '');
+
       function sizeVideo(){
         var r = wrap.getBoundingClientRect();
         var Ww = r.width, Hw = r.height;
         if(Ww<=0 || Hw<=0) return;
-        // No rotation anymore — this playlist mixes horizontal and
-        // vertical clips, and forcing a 90deg rotation (which only ever
-        // made sense for an all-vertical playlist) would turn horizontal
-        // videos on their side. Instead we size the iframe assuming a
-        // typical 16:9 landscape clip and let it COVER the wrap directly
-        // (classic "background-size:cover" math, with a small overscan
-        // buffer for clips that aren't exactly 16:9). Horizontal clips
-        // fill edge-to-edge; vertical clips stay right-side up and get
-        // shown pillarboxed by the player rather than ever appearing
-        // sideways.
-        var OVERSCAN = 1.06;
-        var k = Math.max(Ww/16, Hw/9) * OVERSCAN;
-        var fw = 16*k, fh = 9*k;
+        // Assume the source clip is roughly 16:9, then size the iframe so
+        // it COVERS the wrap on every side (classic "background-size:cover"
+        // math), with a small overscan buffer for clips that aren't
+        // exactly 16:9. When rotate is on, the iframe's own box is sized
+        // pre-rotation so that after the 90deg turn it covers the wrap.
+        var OVERSCAN = cfg.rotate ? 1.14 : 1.06;
+        var fw, fh;
+        if(cfg.rotate){
+          var k = Math.max(Ww/9, Hw/16) * OVERSCAN;
+          fh = 9*k; fw = 16*k; // pre-rotation box — swaps on screen once rotated
+        } else {
+          var k2 = Math.max(Ww/16, Hw/9) * OVERSCAN;
+          fw = 16*k2; fh = 9*k2;
+        }
         frame.style.width = fw + 'px';
         frame.style.height = fh + 'px';
       }
