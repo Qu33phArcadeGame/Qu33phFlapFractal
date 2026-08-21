@@ -39,8 +39,7 @@
   }
   #videoWrap iframe, #videoWrapBottom iframe{
     position:absolute; top:50%; left:50%; border:0;
-    transform:translate(-50%,-50%) rotate(90deg);
-    transform-origin:center center;
+    transform:translate(-50%,-50%);
     pointer-events:none; /* video is decorative — never eats taps meant for the game */
   }
   .videoStart{
@@ -192,16 +191,19 @@
         var r = wrap.getBoundingClientRect();
         var Ww = r.width, Hw = r.height;
         if(Ww<=0 || Hw<=0) return;
-        // Assume the source video is roughly 16:9, then size the
-        // (unrotated) iframe so that once rotated 90deg to lay it flat,
-        // its own box fully COVERS the wrap on every side (classic
-        // "background-size:cover" math). A small overscan buffer is
-        // added on top since not every video in a playlist is exactly
-        // 16:9 — this keeps any residual sliver of letterboxing from
-        // showing regardless of a particular video's real aspect ratio.
-        var OVERSCAN = 1.14;
-        var k = Math.max(Ww/9, Hw/16) * OVERSCAN;
-        var fh = 9*k, fw = 16*k; // fh/fw are the iframe's own (pre-rotation) box
+        // No rotation anymore — this playlist mixes horizontal and
+        // vertical clips, and forcing a 90deg rotation (which only ever
+        // made sense for an all-vertical playlist) would turn horizontal
+        // videos on their side. Instead we size the iframe assuming a
+        // typical 16:9 landscape clip and let it COVER the wrap directly
+        // (classic "background-size:cover" math, with a small overscan
+        // buffer for clips that aren't exactly 16:9). Horizontal clips
+        // fill edge-to-edge; vertical clips stay right-side up and get
+        // shown pillarboxed by the player rather than ever appearing
+        // sideways.
+        var OVERSCAN = 1.06;
+        var k = Math.max(Ww/16, Hw/9) * OVERSCAN;
+        var fw = 16*k, fh = 9*k;
         frame.style.width = fw + 'px';
         frame.style.height = fh + 'px';
       }
@@ -350,7 +352,7 @@ var MARKER_SRC = {"red":'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEUAAAF8C
     return {
       w: Math.max(46, W*0.16),
       gapH: Math.min(Math.max(H*0.30, 140), H*0.42),
-      spacing: Math.max(W*0.60, 178),      // tightened up from 0.72/210 — pipes now come closer together
+      spacing: Math.max(W*0.52, 158),      // tightened again — even closer together than before, harder
       speed: 152 * sW                       // px per SECOND — faster than the classic pace (was 130)
     };
   }
