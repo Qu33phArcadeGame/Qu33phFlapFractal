@@ -134,7 +134,9 @@
   #startBtn:active{ transform:translateY(2px); box-shadow:0 1px 0 #000; }
   #menuHint{
     flex:0 0 auto; font-size:clamp(8px, 1.5dvh, 11px); color:#8affea; text-align:center;
+    visibility:hidden; /* reserves its line so the layout doesn't jump — shown only for the egg-layer */
   }
+  #menuHint.visible{ visibility:visible; }
 </style>
 </head>
 <body>
@@ -170,7 +172,7 @@
   <div id="gameWrap">
     <canvas id="game"></canvas>
     <div id="menuScreen">
-      <div id="menuTitle">CHOOSE YOUR BIRD</div>
+      <div id="menuTitle">CHOOSE YOUR CHARACTER</div>
       <div id="menuGrid"></div>
       <button id="startBtn" type="button">START</button>
       <div id="menuHint">every 5 pipes she lays an egg — it hatches and follows her!</div>
@@ -244,6 +246,24 @@
       return 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(parsed.id) + '?' + common + '&playlist=' + encodeURIComponent(parsed.id);
     }
 
+    // A deliberately wide, hand-picked spread of "corners" of YouTube — a
+    // mix of playlists (lots of variety per pick) and standalone classics —
+    // spanning comedy, science, music, chill/ambient, and internet history.
+    // The shuffle button below jumps to a random one of these instead of
+    // just reshuffling whatever happens to already be loaded.
+    var RANDOM_CORNERS = [
+      { type:'playlist', id:'PLV7xfBoJKBNQ3yhYgQRqocSWs1MKF7j0n' }, // TED — most popular talks of all time
+      { type:'playlist', id:'PLvGUEIPxRGvWvkelmgyWU6QET6mmGbd8W' }, // lofi hip hop radio — beats to relax/study to
+      { type:'playlist', id:'PLD4AF85634A7172B3' },                 // classic viral videos
+      { type:'video',    id:'uzkD5SeuwzM' }, // Kurzgesagt — TRUE Limits Of Humanity
+      { type:'video',    id:'dQw4w9WgXcQ' }, // Rick Astley — Never Gonna Give You Up
+      { type:'video',    id:'9bZkp7q19f0' }, // PSY — Gangnam Style
+      { type:'video',    id:'kJQP7kiw5Fk' }, // Luis Fonsi — Despacito
+      { type:'video',    id:'XqZsoesa55w' }, // Baby Shark Dance
+      { type:'video',    id:'jNQXAC9IVRw' }, // "Me at the zoo" — the first video ever uploaded to YouTube
+      { type:'video',    id:'5qap5aO4i9A' }  // Lofi Girl — lofi hip hop radio livestream
+    ];
+
     VIDEOS.forEach(function(cfg){
       var wrap = document.getElementById(cfg.wrapId);
       var frame = document.getElementById(cfg.frameId);
@@ -304,6 +324,20 @@
         muteBtn.classList.toggle('isMuted', muted);
       }
 
+      // Swaps in a brand new src (a custom link or a shuffled pick) and
+      // resets state accordingly — a freshly loaded iframe starts muted
+      // again per the URL params, and some browsers need a fresh tap
+      // before it will actually play.
+      function loadSrc(newSrc){
+        frame.src = newSrc;
+        try{ localStorage.setItem(cfg.storeKey, newSrc); }catch(e){}
+        muted = true;
+        muteBtn.textContent = '🔇';
+        muteBtn.classList.add('isMuted');
+        startBtn.classList.remove('hidden');
+        setTimeout(sizeVideo, 300);
+      }
+
       startBtn.addEventListener('click', function(){
         setMuted(false);
         ytCommand(frame, 'playVideo');
@@ -317,12 +351,12 @@
       });
 
       shuffleBtn.addEventListener('click', function(){
-        // Turn on shuffle for the rest of the session and jump to a
-        // different track right away for immediate feedback.
-        ytCommand(frame, 'setShuffle', [true]);
-        ytCommand(frame, 'nextVideo');
-        ytCommand(frame, 'playVideo');
-        startBtn.classList.add('hidden');
+        // Jump to a random pick from a totally different corner of
+        // YouTube, not just whatever happens to already be loaded.
+        var choices = RANDOM_CORNERS.filter(function(c){ return buildEmbedSrc(c) !== frame.src; });
+        if(!choices.length) choices = RANDOM_CORNERS;
+        var pick = choices[Math.floor(Math.random() * choices.length)];
+        loadSrc(buildEmbedSrc(pick));
       });
 
       linkBtn.addEventListener('click', function(){
@@ -333,17 +367,7 @@
           window.alert("That doesn't look like a YouTube link — paste the full video or playlist URL.");
           return;
         }
-        var newSrc = buildEmbedSrc(parsed);
-        frame.src = newSrc;
-        try{ localStorage.setItem(cfg.storeKey, newSrc); }catch(e){}
-        // fresh iframe starts muted again per the URL params, and some
-        // browsers need a fresh tap before a newly (re)loaded iframe will
-        // actually play — so reset state and bring the prompt back.
-        muted = true;
-        muteBtn.textContent = '🔇';
-        muteBtn.classList.add('isMuted');
-        startBtn.classList.remove('hidden');
-        setTimeout(sizeVideo, 300);
+        loadSrc(buildEmbedSrc(parsed));
       });
     });
   })();
@@ -400,8 +424,13 @@ var MARKER_SRC = {"red":'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEUAAAF8C
   // ---------- character select menu (sprites only — no names; only the egg-layer gets a tag) ----------
   var menuScreen = document.getElementById('menuScreen');
   var menuGrid = document.getElementById('menuGrid');
+  var menuHint = document.getElementById('menuHint');
   var startBtn = document.getElementById('startBtn');
   var menuOpen = true;
+
+  function updateMenuHint(){
+    menuHint.classList.toggle('visible', selectedChar === EGG_LAYER);
+  }
 
   CHAR_ORDER.forEach(function(key){
     var btn = document.createElement('button');
@@ -423,9 +452,11 @@ var MARKER_SRC = {"red":'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEUAAAF8C
     btn.addEventListener('click', function(){
       selectedChar = key;
       menuGrid.querySelectorAll('.pickBtn').forEach(function(b){ b.classList.toggle('active', b===btn); });
+      updateMenuHint();
     });
     menuGrid.appendChild(btn);
   });
+  updateMenuHint();
 
   function openMenu(){
     menuOpen = true;
