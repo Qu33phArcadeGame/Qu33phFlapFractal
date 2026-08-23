@@ -47,8 +47,8 @@
     position:absolute; inset:0; z-index:2;
     display:flex; align-items:center; justify-content:center;
     background:rgba(0,0,0,0.32); cursor:pointer;
+    opacity:1; transition:opacity .15s ease;
   }
-  .videoStart.hidden{ display:none; }
   .videoStart .playIcon{
     width:min(8dvh,48px); height:min(8dvh,48px); border-radius:50%;
     background:rgba(255,255,255,0.94); display:flex; align-items:center; justify-content:center;
@@ -327,6 +327,15 @@
       var frame = document.getElementById(cfg.frameId);
       var startBtn = document.getElementById(cfg.startId);
 
+      // Driven with direct inline styles rather than a CSS class — this is
+      // the one thing that must never get stuck visible, so it doesn't
+      // depend on a class name/specificity lining up correctly.
+      function setPlayOverlay(show){
+        startBtn.style.opacity = show ? '1' : '0';
+        startBtn.style.pointerEvents = show ? 'auto' : 'none';
+        startBtn.style.display = show ? 'flex' : 'none';
+      }
+
       // A previously loaded custom link (this browser only) takes over
       // from the built-in default.
       try{
@@ -395,20 +404,20 @@
         muted = true;
         muteBtn.textContent = '🔇';
         muteBtn.classList.add('isMuted');
-        startBtn.classList.remove('hidden');
+        setPlayOverlay(true);
         setTimeout(sizeVideo, 300);
       }
 
       startBtn.addEventListener('click', function(){
         setMuted(false);
         ytCommand(frame, 'playVideo');
-        startBtn.classList.add('hidden');
+        setPlayOverlay(false);
       });
 
       muteBtn.addEventListener('click', function(){
         setMuted(!muted);
         ytCommand(frame, 'playVideo');
-        startBtn.classList.add('hidden'); // a deliberate tap means it's running now
+        setPlayOverlay(false); // a deliberate tap means it's running now
       });
 
       shuffleBtn.addEventListener('click', function(){
@@ -427,7 +436,7 @@
 
       function openSearch(){
         searchOverlay.classList.add('open');
-        startBtn.classList.add('hidden');
+        setPlayOverlay(false);
         setTimeout(function(){ searchInput.focus(); }, 50);
       }
       function closeSearch(){
