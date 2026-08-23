@@ -249,6 +249,16 @@
       { wrapId:'videoWrapBottom', frameId:'ytFrame2', startId:'videoStart2', rotate:false, muteId:'muteBottom', shuffleId:'shuffleBottom', searchId:'searchBottom', overlayId:'searchOverlay2', inputId:'searchInput2', goId:'searchGo2', storeKey:'qu33ph-flap-video-bottom', rickrollWeight:0.45 }
     ];
 
+    // Sends a command to a video's embedded YouTube player (mute, play,
+    // shuffle, etc.) via the postMessage-based IFrame API. Guarded so a
+    // failure here (e.g. the iframe hasn't finished loading yet) can
+    // never throw and abort whatever button handler called it.
+    function ytCommand(frame, func, args){
+      try{
+        frame.contentWindow.postMessage(JSON.stringify({event:'command', func:func, args:args||[]}), '*');
+      }catch(e){}
+    }
+
     // A deliberately wide, hand-picked spread of "corners" of YouTube — a
     // mix of playlists (lots of variety per pick) and standalone classics —
     // spanning comedy, science, music, chill/ambient, memes, tech, and
@@ -329,8 +339,15 @@
 
       // Driven with direct inline styles rather than a CSS class — this is
       // the one thing that must never get stuck visible, so it doesn't
-      // depend on a class name/specificity lining up correctly.
+      // depend on a class name/specificity lining up correctly. The
+      // boolean is the real source of truth; the click handler below
+      // checks THIS rather than trusting that the overlay div itself is
+      // what receives the tap (an oversized, transformed, cross-origin
+      // iframe sitting underneath is exactly the kind of thing that can
+      // silently swallow a tap in some mobile browsers).
+      var overlayVisible = true;
       function setPlayOverlay(show){
+        overlayVisible = show;
         startBtn.style.opacity = show ? '1' : '0';
         startBtn.style.pointerEvents = show ? 'auto' : 'none';
         startBtn.style.display = show ? 'flex' : 'none';
@@ -408,11 +425,30 @@
         setTimeout(sizeVideo, 300);
       }
 
-      startBtn.addEventListener('click', function(){
+      function startFromOverlay(){
         setMuted(false);
         ytCommand(frame, 'playVideo');
         setPlayOverlay(false);
+      }
+
+      // Two independent ways to catch the tap: directly on the overlay
+      // (works in the normal case), and delegated up on the whole video
+      // panel checking our own state flag (catches it even if something
+      // else visually on top of the overlay ends up being the actual
+      // event target). Whichever fires first wins; the second is a no-op
+      // once overlayVisible is already false.
+      startBtn.addEventListener('click', startFromOverlay);
+      wrap.addEventListener('click', function(){
+        if(overlayVisible) startFromOverlay();
       });
+      // Belt-and-suspenders for mobile browsers where a tap near a
+      // cross-origin iframe can end up not dispatching a normal 'click'
+      // at all. preventDefault stops the follow-up synthetic click (and
+      // the tap from also reaching the iframe underneath) — calling
+      // startFromOverlay more than once is harmless either way.
+      wrap.addEventListener('touchend', function(e){
+        if(overlayVisible){ e.preventDefault(); startFromOverlay(); }
+      }, { passive:false });
 
       muteBtn.addEventListener('click', function(){
         setMuted(!muted);
